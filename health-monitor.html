@@ -1,0 +1,516 @@
+﻿<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>健康数据监控</title>
+  <script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f0f2f5; color: #333; }
+    .header { position: sticky; top: 0; z-index: 100; padding: 20px 30px; display: flex; align-items: center; justify-content: space-between; backdrop-filter: blur(24px) saturate(180%); -webkit-backdrop-filter: blur(24px) saturate(180%); background: linear-gradient(135deg, rgba(102,126,234,0.35), rgba(118,75,162,0.30)); border-bottom: 1px solid rgba(255,255,255,0.30); box-shadow: 0 8px 32px rgba(102,126,234,0.18), inset 0 1px 0 rgba(255,255,255,0.35); overflow: hidden; }
+    .header::before { content: ''; position: absolute; top: -50%; left: -50%; width: 200%; height: 200%; background: radial-gradient(ellipse at 30% 50%, rgba(255,255,255,0.18) 0%, transparent 60%), radial-gradient(ellipse at 70% 30%, rgba(162,134,255,0.12) 0%, transparent 50%); animation: liquidShift 8s ease-in-out infinite alternate; pointer-events: none; }
+    .header::after { content: ''; position: absolute; top: 0; left: -100%; width: 60%; height: 100%; background: linear-gradient(90deg, transparent, rgba(255,255,255,0.15), transparent); animation: liquidSheen 6s ease-in-out infinite; pointer-events: none; }
+    .header h1 { font-size: 24px; position: relative; z-index: 1; text-shadow: 0 1px 2px rgba(0,0,0,0.10); }
+    .header .time-display { font-size: 14px; opacity: 0.9; position: relative; z-index: 1; }
+
+    @keyframes liquidShift {
+      0% { transform: translate(0, 0) rotate(0deg); }
+      100% { transform: translate(5%, 3%) rotate(3deg); }
+    }
+    @keyframes liquidSheen {
+      0%, 100% { left: -100%; }
+      50% { left: 150%; }
+    }
+    .container { max-width: 1400px; margin: 0 auto; padding: 20px; }
+    .grid { display: grid; grid-template-columns: 380px 1fr; gap: 20px; }
+    .card { background: white; border-radius: 12px; padding: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
+    .card-title { font-size: 16px; font-weight: 600; margin-bottom: 15px; display: flex; align-items: center; gap: 8px; }
+    .form-group { margin-bottom: 12px; }
+    .form-group label { display: block; font-size: 13px; color: #666; margin-bottom: 4px; }
+    .form-group input, .form-group select { width: 100%; padding: 8px 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 14px; outline: none; transition: border 0.2s; }
+    .form-group input:focus, .form-group select:focus { border-color: #667eea; }
+    .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .btn { padding: 10px 20px; border: none; border-radius: 8px; font-size: 14px; cursor: pointer; transition: all 0.2s; }
+    .btn-primary { background: linear-gradient(135deg, #667eea, #764ba2); color: white; width: 100%; }
+    .btn-primary:hover { opacity: 0.9; transform: translateY(-1px); }
+    .btn-danger { background: #ff4d4f; color: white; padding: 4px 10px; font-size: 12px; border-radius: 6px; cursor: pointer; }
+    .btn-danger:hover { opacity: 0.8; }
+    .tabs { display: flex; gap: 5px; margin-bottom: 15px; }
+    .tab { padding: 8px 16px; border-radius: 8px; cursor: pointer; font-size: 13px; background: #f5f5f5; transition: all 0.2s; user-select: none; }
+    .tab:hover { background: #e8e8e8; }
+    .tab.active { background: #667eea; color: white; }
+    #chart-container { height: 320px; }
+    .data-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .data-table th { background: #fafafa; padding: 8px 10px; text-align: left; font-weight: 500; color: #666; border-bottom: 1px solid #eee; }
+    .data-table td { padding: 8px 10px; border-bottom: 1px solid #f0f0f0; }
+    .data-table tr:hover { background: #fafafa; }
+    .suggestion-card { background: linear-gradient(135deg, #f5f7fa, #e4e8f0); border-radius: 12px; padding: 20px; margin-top: 20px; border-left: 4px solid #667eea; }
+    .suggestion-card h3 { font-size: 16px; margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
+    .suggestion-list { list-style: none; }
+    .suggestion-list li { padding: 8px 0; font-size: 14px; display: flex; align-items: flex-start; gap: 8px; }
+    .suggestion-list li .emoji { font-size: 16px; flex-shrink: 0; }
+    .stats-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 20px; }
+    .stat-item { background: white; border-radius: 10px; padding: 15px; text-align: center; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+    .stat-item .value { font-size: 24px; font-weight: 700; color: #667eea; }
+    .stat-item .label { font-size: 12px; color: #999; margin-top: 4px; }
+    .badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 11px; color: white; }
+    .badge-good { background: #52c41a; }
+    .badge-warn { background: #faad14; }
+    .badge-bad { background: #ff4d4f; }
+    @media (max-width: 900px) { .grid { grid-template-columns: 1fr; } .stats-row { grid-template-columns: repeat(2, 1fr); } }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>健康数据监控中心</h1>
+    <div class="time-display" id="currentTime"></div>
+  </div>
+  <div class="container">
+    <div class="stats-row" id="statsRow">
+      <div class="stat-item"><div class="value" id="statWeight">--</div><div class="label">当前体重 (kg)</div></div>
+      <div class="stat-item"><div class="value" id="statBMI">--</div><div class="label">当前 BMI</div></div>
+      <div class="stat-item"><div class="value" id="statSteps">0</div><div class="label">今日步数</div></div>
+      <div class="stat-item"><div class="value" id="statCal">0</div><div class="label">今日消耗 (kcal)</div></div>
+    </div>
+
+    <div class="grid">
+      <div>
+        <div class="card" style="margin-bottom: 20px;">
+          <div class="card-title">数据录入</div>
+          <div class="tabs" id="formTabs">
+            <div class="tab active" data-tab="body">身体数据</div>
+            <div class="tab" data-tab="exercise">运动数据</div>
+          </div>
+
+          <div id="bodyForm">
+            <div class="form-group">
+              <label>日期</label>
+              <input type="date" id="bodyDate">
+            </div>
+            <div class="form-row">
+              <div class="form-group"><label>体重 (kg)</label><input type="number" id="weight" step="0.1" placeholder="65.5"></div>
+              <div class="form-group"><label>体脂率 (%)</label><input type="number" id="bodyFat" step="0.1" placeholder="20.5"></div>
+            </div>
+            <div class="form-row">
+              <div class="form-group"><label>身高 (cm)</label><input type="number" id="height" step="0.1" placeholder="175"></div>
+              <div class="form-group"><label>静息心率 (bpm)</label><input type="number" id="restHR" step="1" placeholder="65"></div>
+            </div>
+            <div class="form-row">
+              <div class="form-group"><label>血压收缩压</label><input type="number" id="bpSys" placeholder="120"></div>
+              <div class="form-group"><label>血压舒张压</label><input type="number" id="bpDia" placeholder="80"></div>
+            </div>
+            <button class="btn btn-primary" id="btnBody">添加身体数据</button>
+          </div>
+
+          <div id="exerciseForm" style="display:none;">
+            <div class="form-group">
+              <label>日期</label>
+              <input type="date" id="exDate">
+            </div>
+            <div class="form-row">
+              <div class="form-group"><label>运动类型</label>
+                <select id="exType">
+                  <option value="跑步">跑步</option>
+                  <option value="骑行">骑行</option>
+                  <option value="游泳">游泳</option>
+                  <option value="跳绳">跳绳</option>
+                  <option value="力量训练">力量训练</option>
+                  <option value="瑜伽">瑜伽</option>
+                  <option value="步行">步行</option>
+                  <option value="其他">其他</option>
+                </select>
+              </div>
+              <div class="form-group"><label>时长 (分钟)</label><input type="number" id="exDuration" placeholder="30"></div>
+            </div>
+            <div class="form-row">
+              <div class="form-group"><label>步数</label><input type="number" id="steps" placeholder="8000"></div>
+              <div class="form-group"><label>消耗热量 (kcal)</label><input type="number" id="calories" placeholder="300"></div>
+            </div>
+            <div class="form-row">
+              <div class="form-group"><label>平均心率 (bpm)</label><input type="number" id="avgHR" placeholder="140"></div>
+              <div class="form-group"><label>睡眠时长 (小时)</label><input type="number" id="sleep" step="0.5" placeholder="7.5"></div>
+            </div>
+            <button class="btn btn-primary" id="btnExercise">添加运动数据</button>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-title">数据记录</div>
+          <div class="tabs" id="tableTabs">
+            <div class="tab active" data-tab="body">身体数据</div>
+            <div class="tab" data-tab="exercise">运动数据</div>
+          </div>
+          <div style="max-height: 250px; overflow-y: auto;">
+            <table class="data-table" id="bodyTable">
+              <thead><tr><th>日期</th><th>体重</th><th>BMI</th><th>体脂</th><th></th></tr></thead>
+              <tbody id="bodyTableBody"></tbody>
+            </table>
+            <table class="data-table" id="exerciseTable" style="display:none;">
+              <thead><tr><th>日期</th><th>类型</th><th>步数</th><th>消耗</th><th></th></tr></thead>
+              <tbody id="exerciseTableBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <div class="card" style="margin-bottom: 20px;">
+          <div class="card-title">趋势图表</div>
+          <div class="tabs" id="chartTabs">
+            <div class="tab active" data-tab="weight">体重/BMI</div>
+            <div class="tab" data-tab="steps">步数/消耗</div>
+            <div class="tab" data-tab="heart">心率/睡眠</div>
+          </div>
+          <div id="chart-container"></div>
+        </div>
+
+        <div class="suggestion-card" id="suggestionCard">
+          <h3>第二天活动建议</h3>
+          <ul class="suggestion-list" id="suggestionList">
+            <li><span class="emoji">info</span> 请先录入身体和运动数据，系统将自动生成个性化建议。</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    var bodyData = JSON.parse(localStorage.getItem('bodyData') || '[]');
+    var exerciseData = JSON.parse(localStorage.getItem('exerciseData') || '[]');
+    var currentChart = 'weight';
+    var chartInstance = null;
+    var today = new Date().toISOString().split('T')[0];
+
+    document.getElementById('bodyDate').value = today;
+    document.getElementById('exDate').value = today;
+
+    // 时间显示
+    function updateTime() {
+      var now = new Date();
+      document.getElementById('currentTime').textContent = now.toLocaleString('zh-CN', { year:'numeric', month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit', second:'2-digit' });
+    }
+    updateTime();
+    setInterval(updateTime, 1000);
+
+    // Tab 切换 - 用数据属性控制
+    function setupTabs(containerId, callback) {
+      var tabs = document.querySelectorAll('#' + containerId + ' .tab');
+      for (var i = 0; i < tabs.length; i++) {
+        (function(tab) {
+          tab.addEventListener('click', function() {
+            var val = this.getAttribute('data-tab');
+            // 更新 active
+            var siblings = this.parentElement.querySelectorAll('.tab');
+            for (var j = 0; j < siblings.length; j++) {
+              siblings[j].classList.remove('active');
+            }
+            this.classList.add('active');
+            callback(val, this.parentElement);
+          });
+        })(tabs[i]);
+      }
+    }
+
+    // 表单 Tab
+    setupTabs('formTabs', function(val) {
+      document.getElementById('bodyForm').style.display = val === 'body' ? 'block' : 'none';
+      document.getElementById('exerciseForm').style.display = val === 'exercise' ? 'block' : 'none';
+    });
+
+    // 数据表格 Tab
+    setupTabs('tableTabs', function(val) {
+      document.getElementById('bodyTable').style.display = val === 'body' ? 'table' : 'none';
+      document.getElementById('exerciseTable').style.display = val === 'exercise' ? 'table' : 'none';
+    });
+
+    // 图表 Tab
+    setupTabs('chartTabs', function(val) {
+      currentChart = val;
+      renderChart();
+    });
+
+    // 身体数据提交
+    document.getElementById('btnBody').addEventListener('click', function() {
+      var date = document.getElementById('bodyDate').value;
+      var weight = parseFloat(document.getElementById('weight').value);
+      var bodyFat = parseFloat(document.getElementById('bodyFat').value) || null;
+      var height = parseFloat(document.getElementById('height').value) || null;
+      var restHR = parseInt(document.getElementById('restHR').value) || null;
+      var bpSys = parseInt(document.getElementById('bpSys').value) || null;
+      var bpDia = parseInt(document.getElementById('bpDia').value) || null;
+
+      if (!date) { alert('请填写日期！'); return; }
+      if (isNaN(weight) || weight <= 0) { alert('请填写有效体重！'); return; }
+
+      var bmi = height ? (weight / ((height / 100) * (height / 100))).toFixed(1) : null;
+      bodyData.push({ date: date, weight: weight, bodyFat: bodyFat, height: height, bmi: bmi, restHR: restHR, bpSys: bpSys, bpDia: bpDia });
+      bodyData.sort(function(a, b) { return a.date.localeCompare(b.date); });
+      saveData();
+      refreshAll();
+
+      document.getElementById('weight').value = '';
+      document.getElementById('bodyFat').value = '';
+      document.getElementById('height').value = '';
+      document.getElementById('restHR').value = '';
+      document.getElementById('bpSys').value = '';
+      document.getElementById('bpDia').value = '';
+      alert('身体数据已添加！');
+    });
+
+    // 运动数据提交
+    document.getElementById('btnExercise').addEventListener('click', function() {
+      var date = document.getElementById('exDate').value;
+      var exType = document.getElementById('exType').value;
+      var duration = parseInt(document.getElementById('exDuration').value) || 0;
+      var steps = parseInt(document.getElementById('steps').value) || 0;
+      var calories = parseInt(document.getElementById('calories').value) || 0;
+      var avgHR = parseInt(document.getElementById('avgHR').value) || null;
+      var sleep = parseFloat(document.getElementById('sleep').value) || null;
+
+      if (!date) { alert('请填写日期！'); return; }
+
+      exerciseData.push({ date: date, exType: exType, duration: duration, steps: steps, calories: calories, avgHR: avgHR, sleep: sleep });
+      exerciseData.sort(function(a, b) { return a.date.localeCompare(b.date); });
+      saveData();
+      refreshAll();
+
+      document.getElementById('exDuration').value = '';
+      document.getElementById('steps').value = '';
+      document.getElementById('calories').value = '';
+      document.getElementById('avgHR').value = '';
+      document.getElementById('sleep').value = '';
+      alert('运动数据已添加！');
+    });
+
+    function deleteBodyData(idx) {
+      bodyData.splice(idx, 1);
+      saveData();
+      refreshAll();
+    }
+    function deleteExerciseData(idx) {
+      exerciseData.splice(idx, 1);
+      saveData();
+      refreshAll();
+    }
+
+    function saveData() {
+      localStorage.setItem('bodyData', JSON.stringify(bodyData));
+      localStorage.setItem('exerciseData', JSON.stringify(exerciseData));
+    }
+
+    function refreshAll() {
+      renderBodyTable();
+      renderExerciseTable();
+      updateStats();
+      renderChart();
+      generateSuggestions();
+    }
+
+    function renderBodyTable() {
+      var tbody = document.getElementById('bodyTableBody');
+      var html = '';
+      for (var i = bodyData.length - 1; i >= 0 && i >= bodyData.length - 20; i--) {
+        var d = bodyData[i];
+        var bmiClass = '';
+        if (d.bmi) {
+          var bmiVal = parseFloat(d.bmi);
+          if (bmiVal < 18.5) bmiClass = 'badge-warn';
+          else if (bmiVal < 24) bmiClass = 'badge-good';
+          else bmiClass = 'badge-bad';
+        }
+        html += '<tr><td>' + d.date + '</td><td>' + d.weight + '</td>';
+        html += '<td>' + (d.bmi ? '<span class="badge ' + bmiClass + '">' + d.bmi + '</span>' : '--') + '</td>';
+        html += '<td>' + (d.bodyFat != null ? d.bodyFat + '%' : '--') + '</td>';
+        html += '<td><button class="btn-danger" onclick="deleteBodyData(' + i + ')">x</button></td></tr>';
+      }
+      if (html === '') html = '<tr><td colspan="5" style="text-align:center;color:#999;padding:20px;">暂无数据</td></tr>';
+      tbody.innerHTML = html;
+    }
+
+    function renderExerciseTable() {
+      var tbody = document.getElementById('exerciseTableBody');
+      var html = '';
+      for (var i = exerciseData.length - 1; i >= 0 && i >= exerciseData.length - 20; i--) {
+        var d = exerciseData[i];
+        html += '<tr><td>' + d.date + '</td><td>' + d.exType + '</td>';
+        html += '<td>' + (d.steps ? d.steps.toLocaleString() : '--') + '</td>';
+        html += '<td>' + (d.calories ? d.calories + ' kcal' : '--') + '</td>';
+        html += '<td><button class="btn-danger" onclick="deleteExerciseData(' + i + ')">x</button></td></tr>';
+      }
+      if (html === '') html = '<tr><td colspan="5" style="text-align:center;color:#999;padding:20px;">暂无数据</td></tr>';
+      tbody.innerHTML = html;
+    }
+
+    function updateStats() {
+      if (bodyData.length > 0) {
+        var last = bodyData[bodyData.length - 1];
+        document.getElementById('statWeight').textContent = last.weight;
+        document.getElementById('statBMI').textContent = last.bmi || '--';
+      }
+      if (exerciseData.length > 0) {
+        var todayEx = null;
+        for (var i = exerciseData.length - 1; i >= 0; i--) {
+          if (exerciseData[i].date === today) { todayEx = exerciseData[i]; break; }
+        }
+        document.getElementById('statSteps').textContent = todayEx ? todayEx.steps.toLocaleString() : '0';
+        document.getElementById('statCal').textContent = todayEx ? todayEx.calories : '0';
+      }
+    }
+
+    function renderChart() {
+      var dom = document.getElementById('chart-container');
+      if (!chartInstance) {
+        chartInstance = echarts.init(dom);
+      }
+
+      var allDates = {};
+      for (var i = 0; i < bodyData.length; i++) allDates[bodyData[i].date] = true;
+      for (var i = 0; i < exerciseData.length; i++) allDates[exerciseData[i].date] = true;
+      var dates = [];
+      for (var d in allDates) dates.push(d);
+      dates.sort();
+
+      var option = {};
+
+      if (currentChart === 'weight') {
+        var weights = dates.map(function(d) { var bd = null; for (var i = 0; i < bodyData.length; i++) { if (bodyData[i].date === d) { bd = bodyData[i]; break; } } return bd ? bd.weight : null; });
+        var bmis = dates.map(function(d) { var bd = null; for (var i = 0; i < bodyData.length; i++) { if (bodyData[i].date === d) { bd = bodyData[i]; break; } } return bd && bd.bmi ? parseFloat(bd.bmi) : null; });
+        option = {
+          tooltip: { trigger: 'axis' },
+          legend: { data: ['体重 (kg)', 'BMI'], bottom: 0 },
+          grid: { left: 55, right: 55, top: 30, bottom: 40 },
+          xAxis: { type: 'category', data: dates, axisLabel: { rotate: 30 } },
+          yAxis: [
+            { type: 'value', name: '体重(kg)' },
+            { type: 'value', name: 'BMI', min: Math.min.apply(null, bmis.filter(function(v){return v;})) - 2 || 15, max: Math.max.apply(null, bmis.filter(function(v){return v;})) + 2 || 30 }
+          ],
+          series: [
+            { name: '体重 (kg)', type: 'line', data: weights, smooth: true, symbol: 'circle', symbolSize: 8, lineStyle: { width: 3 }, itemStyle: { color: '#667eea' } },
+            { name: 'BMI', type: 'line', yAxisIndex: 1, data: bmis, smooth: true, symbol: 'circle', symbolSize: 8, lineStyle: { width: 3, type: 'dashed' }, itemStyle: { color: '#764ba2' } }
+          ]
+        };
+      } else if (currentChart === 'steps') {
+        var steps = dates.map(function(d) { var ed = null; for (var i = 0; i < exerciseData.length; i++) { if (exerciseData[i].date === d) { ed = exerciseData[i]; break; } } return ed ? ed.steps : 0; });
+        var cals = dates.map(function(d) { var ed = null; for (var i = 0; i < exerciseData.length; i++) { if (exerciseData[i].date === d) { ed = exerciseData[i]; break; } } return ed ? ed.calories : 0; });
+        option = {
+          tooltip: { trigger: 'axis' },
+          legend: { data: ['步数', '消耗热量 (kcal)'], bottom: 0 },
+          grid: { left: 55, right: 55, top: 30, bottom: 40 },
+          xAxis: { type: 'category', data: dates, axisLabel: { rotate: 30 } },
+          yAxis: [
+            { type: 'value', name: '步数' },
+            { type: 'value', name: 'kcal' }
+          ],
+          series: [
+            { name: '步数', type: 'bar', data: steps, itemStyle: { color: new echarts.graphic.LinearGradient(0,0,0,1,[{offset:0,color:'#52c41a'},{offset:1,color:'#95de64'}]) } },
+            { name: '消耗热量 (kcal)', type: 'line', yAxisIndex: 1, data: cals, smooth: true, symbol: 'circle', symbolSize: 8, lineStyle: { width: 3 }, itemStyle: { color: '#fa8c16' } }
+          ]
+        };
+      } else if (currentChart === 'heart') {
+        var restHRs = dates.map(function(d) { var bd = null; for (var i = 0; i < bodyData.length; i++) { if (bodyData[i].date === d) { bd = bodyData[i]; break; } } return bd && bd.restHR ? bd.restHR : null; });
+        var avgHRs = dates.map(function(d) { var ed = null; for (var i = 0; i < exerciseData.length; i++) { if (exerciseData[i].date === d) { ed = exerciseData[i]; break; } } return ed && ed.avgHR ? ed.avgHR : null; });
+        var sleeps = dates.map(function(d) { var ed = null; for (var i = 0; i < exerciseData.length; i++) { if (exerciseData[i].date === d) { ed = exerciseData[i]; break; } } return ed && ed.sleep ? ed.sleep : null; });
+        option = {
+          tooltip: { trigger: 'axis' },
+          legend: { data: ['静息心率', '运动心率', '睡眠(h)'], bottom: 0 },
+          grid: { left: 55, right: 55, top: 30, bottom: 40 },
+          xAxis: { type: 'category', data: dates, axisLabel: { rotate: 30 } },
+          yAxis: [
+            { type: 'value', name: 'bpm' },
+            { type: 'value', name: '睡眠(h)', min: 0, max: 12 }
+          ],
+          series: [
+            { name: '静息心率', type: 'line', data: restHRs, smooth: true, symbol: 'circle', symbolSize: 8, lineStyle: { width: 3 }, itemStyle: { color: '#1890ff' } },
+            { name: '运动心率', type: 'line', data: avgHRs, smooth: true, symbol: 'circle', symbolSize: 8, lineStyle: { width: 3, type: 'dashed' }, itemStyle: { color: '#ff4d4f' } },
+            { name: '睡眠(h)', type: 'bar', data: sleeps, itemStyle: { color: new echarts.graphic.LinearGradient(0,0,0,1,[{offset:0,color:'#722ed1'},{offset:1,color:'#b37feb'}]) } }
+          ]
+        };
+      }
+
+      chartInstance.setOption(option, true);
+    }
+
+    window.addEventListener('resize', function() { if (chartInstance) chartInstance.resize(); });
+
+    function generateSuggestions() {
+      var list = document.getElementById('suggestionList');
+      var suggestions = [];
+
+      if (bodyData.length === 0 && exerciseData.length === 0) {
+        list.innerHTML = '<li><span class="emoji">i</span> 请先录入身体和运动数据，系统将自动生成个性化建议。</li>';
+        return;
+      }
+
+      var lastBody = bodyData.length > 0 ? bodyData[bodyData.length - 1] : null;
+      var lastEx = exerciseData.length > 0 ? exerciseData[exerciseData.length - 1] : null;
+
+      if (lastBody) {
+        if (lastBody.bmi) {
+          var bmi = parseFloat(lastBody.bmi);
+          if (bmi < 18.5) suggestions.push({ e: 'm', t: '您的 BMI 偏低 ('+bmi+')，建议增加优质蛋白摄入（鸡蛋、鱼肉、豆类），每日加餐 1-2 次。' });
+          else if (bmi > 24) suggestions.push({ e: 'w', t: '您的 BMI 偏高 ('+bmi+')，建议控制碳水摄入，减少精制糖，增加蔬菜和瘦肉比例。' });
+          else suggestions.push({ e: 'c', t: '您的 BMI 在正常范围 ('+bmi+')，继续保持均衡饮食即可！' });
+        }
+        if (lastBody.bodyFat) {
+          var bf = lastBody.bodyFat;
+          if (bf > 25) suggestions.push({ e: 'f', t: '体脂率 '+bf+'% 偏高，建议每周进行 3-4 次有氧运动（快走、慢跑、游泳），每次 30-45 分钟。' });
+          else if (bf > 20) suggestions.push({ e: 'r', t: '体脂率 '+bf+'% 略高，建议增加力量训练比例，帮助提高基础代谢。' });
+          else suggestions.push({ e: 'x', t: '体脂率 '+bf+'% 很理想！继续保持当前运动习惯。' });
+        }
+        if (lastBody.restHR) {
+          if (lastBody.restHR > 80) suggestions.push({ e: 'r', t: '静息心率 '+lastBody.restHR+' bpm 偏高，建议加强有氧运动，减少咖啡因摄入，学会放松减压。' });
+          else if (lastBody.restHR < 50) suggestions.push({ e: 'r', t: '静息心率 '+lastBody.restHR+' bpm 偏低（运动员水平或需关注），如无不适则无需担心。' });
+          else suggestions.push({ e: 'r', t: '静息心率 '+lastBody.restHR+' bpm 处于正常范围，心脏功能良好。' });
+        }
+        if (lastBody.bpSys && lastBody.bpDia) {
+          if (lastBody.bpSys > 140 || lastBody.bpDia > 90) suggestions.push({ e: 'z', t: '血压 '+lastBody.bpSys+'/'+lastBody.bpDia+' mmHg 偏高，建议低盐饮食（每日食盐 < 5g），定期监测，必要时就医。' });
+          else if (lastBody.bpSys > 130 || lastBody.bpDia > 85) suggestions.push({ e: '!', t: '血压 '+lastBody.bpSys+'/'+lastBody.bpDia+' mmHg 处于临界值，建议减少压力，适度运动。' });
+          else suggestions.push({ e: 'c', t: '血压 '+lastBody.bpSys+'/'+lastBody.bpDia+' mmHg 正常，继续保持健康生活方式！' });
+        }
+      }
+
+      if (lastEx) {
+        if (lastEx.steps < 5000) suggestions.push({ e: 'v', t: '昨日步数仅 '+lastEx.steps.toLocaleString()+' 步，建议明天至少走 8000 步，可分 3 次完成（如午饭后 30 分钟）。' });
+        else if (lastEx.steps < 10000) suggestions.push({ e: 'n', t: '昨日 '+lastEx.steps.toLocaleString()+' 步，距离 1 万步目标还差一些，建议每天多走 2000 步。' });
+        else suggestions.push({ e: 'i', t: '昨日 '+lastEx.steps.toLocaleString()+' 步，表现优秀！建议保持每天 1 万步的节奏。' });
+
+        if (lastEx.sleep != null) {
+          if (lastEx.sleep < 6) suggestions.push({ e: 'p', t: '昨日睡眠仅 '+lastEx.sleep+' 小时，严重不足！建议 23:00 前入睡，睡前避免使用电子设备。' });
+          else if (lastEx.sleep < 7) suggestions.push({ e: 'd', t: '昨日睡眠 '+lastEx.sleep+' 小时，建议延长至 7-8 小时，保证充足恢复时间。' });
+          else suggestions.push({ e: 'd', t: '昨日睡眠 '+lastEx.sleep+' 小时，睡眠质量良好！' });
+        }
+
+        var types = {};
+        for (var i = 0; i < exerciseData.length; i++) types[exerciseData[i].exType] = true;
+        if (Object.keys(types).length <= 1) suggestions.push({ e: 'r', t: '目前运动类型单一，建议尝试多样化运动（如跑步+游泳+瑜伽组合），避免肌肉劳损。' });
+
+        if (lastEx.calories > 0) {
+          if (lastEx.calories < 150) suggestions.push({ e: 'f', t: '昨日消耗 '+lastEx.calories+' kcal 较少，建议增加运动强度或延长时间至 40 分钟以上。' });
+          else if (lastEx.calories > 500) suggestions.push({ e: 'o', t: '昨日消耗 '+lastEx.calories+' kcal，运动量很大！注意运动后补充蛋白质和水分。' });
+        }
+      }
+
+      if (bodyData.length >= 3) {
+        var recent = bodyData.slice(-3);
+        var trend = recent[2].weight - recent[0].weight;
+        if (trend < -1) suggestions.push({ e: '-', t: '近 3 次记录体重下降 ' + Math.abs(trend).toFixed(1) + ' kg，如果是有意识减重则很好；如果是无意识下降请注意营养摄入。' });
+        else if (trend > 1) suggestions.push({ e: '+', t: '近 3 次记录体重上升 ' + trend.toFixed(1) + ' kg，建议检查饮食是否过量，增加运动量。' });
+      }
+
+      if (suggestions.length === 0) {
+        list.innerHTML = '<li><span class="emoji">?</span> 数据不足，请录入更多身体和运动数据以获取详细建议。</li>';
+        return;
+      }
+
+      var html = '';
+      for (var i = 0; i < suggestions.length; i++) {
+        html += '<li><span class="emoji">' + suggestions[i].e + '</span><span>' + suggestions[i].t + '</span></li>';
+      }
+      list.innerHTML = html;
+    }
+
+    refreshAll();
+  </script>
+</body>
+</html>
